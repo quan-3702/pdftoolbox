@@ -1,4 +1,4 @@
-const CACHE = 'pdftoolbox-v1';
+const CACHE = 'pdftoolbox-v2';
 const LOCAL = ['./', 'index.html', 'style.css', 'app.js', 'manifest.json', 'icon-192.png', 'icon-512.png'];
 const CDN = [
   'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js',

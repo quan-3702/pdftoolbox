@@ -190,7 +190,7 @@ function thumbFor(p) {
         el.width = Math.ceil(vp.width); el.height = Math.ceil(vp.height);
         const ctx = el.getContext('2d');
         ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, el.width, el.height);
-        await pg.render({ canvasContext: ctx, viewport: vp }).promise;
+        await pg.render({ canvasContext: ctx, viewport: vp, intent: 'print' }).promise; // 'print' also renders in background tabs
       } catch (_) {}
     });
   }
@@ -329,7 +329,7 @@ async function renderPageTo(canvas, p, maxW) {
   const vp = pg.getViewport({ scale: maxW / vp1.width, rotation });
   canvas.width = Math.round(vp.width); canvas.height = Math.round(vp.height);
   ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-  await pg.render({ canvasContext: ctx, viewport: vp }).promise;
+  await pg.render({ canvasContext: ctx, viewport: vp, intent: 'print' }).promise; // 'print' also renders in background tabs
 }
 
 async function startPlace(p) {
@@ -464,7 +464,7 @@ async function rasterize(bytes, dpi, quality, onProgress) {
     c.width = Math.max(1, Math.round(vp.width)); c.height = Math.max(1, Math.round(vp.height));
     const ctx = c.getContext('2d');
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
-    await pg.render({ canvasContext: ctx, viewport: vp }).promise;
+    await pg.render({ canvasContext: ctx, viewport: vp, intent: 'print' }).promise; // 'print' also renders in background tabs
     const jpg = await new Promise((r) => c.toBlob(async (b) => r(new Uint8Array(await b.arrayBuffer())), 'image/jpeg', quality));
     const img = await out.embedJpg(jpg);
     const page = out.addPage([vp1.width, vp1.height]);
