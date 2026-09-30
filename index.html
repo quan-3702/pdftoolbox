@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PDF Toolbox – Merge, Split, Compress &amp; Sign PDF</title>
+  <meta name="description" content="Merge, split, reorder, rotate, compress and sign PDF files. Works offline – your files never leave your PC.">
+  <meta name="theme-color" content="#0f766e">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="icon-192.png" alt="" width="28" height="28">
+      <span>PDF Toolbox</span>
+    </div>
+    <div class="top-right">
+      <span class="tag">100% offline · files never leave your PC</span>
+      <button id="proBtn" class="pro-btn" hidden>★ Get Pro</button>
+    </div>
+  </header>
+
+  <dialog id="proDialog" class="dlg">
+    <h2>PDF Toolbox Pro</h2>
+    <p class="muted">One-time purchase. Yours forever on this Microsoft account.</p>
+    <ul class="pro-list">
+      <li><strong>Sign PDFs</strong> – draw or type your signature</li>
+      <li><strong>Strong compression</strong> and compress <strong>under a size</strong> (e.g. 1 MB)</li>
+      <li><strong>Watermark</strong> and <strong>page numbers</strong></li>
+      <li><strong>Unlimited</strong> files per merge <span class="muted">(Free: 3)</span></li>
+    </ul>
+    <p id="proMsg" class="pro-msg" hidden></p>
+    <div class="row-btns">
+      <button id="buyBtn" class="primary">Unlock Pro</button>
+      <button id="restoreBtn" class="ghost">Restore purchase</button>
+      <button id="closePro" class="ghost">Not now</button>
+    </div>
+  </dialog>
+
+  <dialog id="sigDialog" class="dlg sig-dlg">
+    <h2>Your signature</h2>
+    <div class="seg">
+      <button id="sigDrawTab" class="seg-on">Draw</button>
+      <button id="sigTypeTab">Type</button>
+    </div>
+    <canvas id="sigPad" width="600" height="200"></canvas>
+    <div id="sigTypeBox" hidden>
+      <input id="sigText" type="text" placeholder="Type your name" maxlength="40">
+    </div>
+    <div class="row-btns">
+      <select id="sigColor" aria-label="Ink color">
+        <option value="#111827">Black ink</option>
+        <option value="#1d4ed8">Blue ink</option>
+      </select>
+      <button id="sigClear" class="ghost">Clear</button>
+      <span class="grow"></span>
+      <button id="sigCancel" class="ghost">Cancel</button>
+      <button id="sigOk" class="primary">Use signature</button>
+    </div>
+  </dialog>
+
+  <dialog id="placeDialog" class="dlg place-dlg">
+    <div class="place-head">
+      <strong id="placeTitle">Place signature</strong>
+      <span class="muted">Drag the signature to move it. Use the slider to resize.</span>
+    </div>
+    <div class="place-stage" id="placeStage">
+      <canvas id="placeCanvas"></canvas>
+      <img id="placeSig" alt="" draggable="false">
+    </div>
+    <div class="row-btns">
+      <label class="inline">Size <input id="placeSize" type="range" min="10" max="80" value="30"></label>
+      <span class="grow"></span>
+      <button id="placeRemove" class="ghost">Remove from page</button>
+      <button id="placeCancel" class="ghost">Cancel</button>
+      <button id="placeOk" class="primary">Done</button>
+    </div>
+  </dialog>
+
+  <main class="layout">
+    <section>
+      <label id="drop" class="drop" tabindex="0">
+        <input id="picker" type="file" accept="application/pdf,.pdf,image/png,image/jpeg" multiple hidden>
+        <div class="drop-inner">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 18v-6m0 0-3 3m3-3 3 3"/></svg>
+          <strong>Drop PDF files here</strong>
+          <span>or click to choose · add several PDFs to merge them · JPG and PNG become pages</span>
+        </div>
+      </label>
+
+      <div class="listbar">
+        <span id="count">No pages yet</span>
+        <div class="btns">
+          <button id="selAll" class="ghost" disabled>Select all</button>
+          <button id="selNone" class="ghost" disabled>Select none</button>
+          <button id="rotSel" class="ghost" disabled>⟳ Rotate selected</button>
+          <button id="delSel" class="ghost" disabled>✕ Delete selected</button>
+          <button id="clear" class="ghost" disabled>Clear all</button>
+        </div>
+      </div>
+      <ul id="grid" class="grid"></ul>
+      <p id="empty" class="empty">Every page of your PDFs appears here. Drag to reorder, click a page to select it.</p>
+    </section>
+
+    <aside class="panel">
+      <h2>Save</h2>
+      <button id="saveAll" class="primary" disabled>Save as one PDF</button>
+      <button id="saveSel" class="secondary" disabled>Extract selected pages</button>
+      <div class="field">
+        <span>Split into several PDFs</span>
+        <div class="row">
+          <select id="splitMode">
+            <option value="1">Every page</option>
+            <option value="2">Every 2 pages</option>
+            <option value="5">Every 5 pages</option>
+            <option value="10">Every 10 pages</option>
+            <option value="file">By original file</option>
+          </select>
+          <button id="split" class="secondary" disabled>Split (.zip)</button>
+        </div>
+      </div>
+
+      <h2>Options</h2>
+      <label class="field">Compress
+        <select id="compress">
+          <option value="none" selected>No compression (keeps text)</option>
+          <option value="medium">Medium – 150 dpi</option>
+          <option value="strong">Strong – 100 dpi ★ Pro</option>
+          <option value="1024">Under 1 MB ★ Pro</option>
+          <option value="2048">Under 2 MB ★ Pro</option>
+          <option value="5120">Under 5 MB ★ Pro</option>
+        </select>
+        <small class="hint" id="compressHint" hidden>Compression turns pages into images – text can no longer be selected.</small>
+      </label>
+
+      <div class="field">
+        <span>Signature <span class="badge">PRO</span></span>
+        <button id="sigBtn" class="secondary">✍ Create signature</button>
+        <small class="hint" id="sigHint">Then click ✍ on a page to place it.</small>
+      </div>
+
+      <label class="field">Watermark <span class="badge">PRO</span>
+        <input id="wmText" type="text" value="" placeholder="e.g. CONFIDENTIAL – leave empty for none">
+      </label>
+      <label class="check"><input id="pageNums" type="checkbox"> Page numbers <span class="badge">PRO</span></label>
+
+      <label class="field">File name
+        <input id="fname" type="text" value="document" placeholder="document">
+      </label>
+
+      <div id="summary" class="summary" hidden></div>
+
+      <a class="promo" href="https://apps.microsoft.com/detail/9NF418NKG80Z" target="_blank" rel="noopener">
+        <img src="https://quan-3702.github.io/snappdf/icon-192.png" alt="" width="28" height="28">
+        <span><strong>SnapPDF</strong><br>Photos → PDF · scan documents</span>
+      </a>
+      <a class="promo" href="https://apps.microsoft.com/detail/9P25KDSFDB0N" target="_blank" rel="noopener">
+        <img src="https://quan-3702.github.io/pixelbatch/icon-192.png" alt="" width="28" height="28">
+        <span><strong>PixelBatch</strong><br>Resize, compress &amp; convert images</span>
+      </a>
+      <a class="promo feedback" href="mailto:thequan03072002@gmail.com?subject=PDF%20Toolbox%20feedback">✉ Feedback &amp; support</a>
+    </aside>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
