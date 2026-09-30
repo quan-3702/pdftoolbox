@@ -1,4 +1,4 @@
-const CACHE = 'pdftoolbox-v2';
+const CACHE = 'pdftoolbox-v3';
 const LOCAL = ['./', 'index.html', 'style.css', 'app.js', 'manifest.json', 'icon-192.png', 'icon-512.png'];
 const CDN = [
   'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js',
@@ -9,7 +9,7 @@ const CDN = [
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then(async (c) => {
-    await c.addAll(LOCAL);
+    await c.addAll(LOCAL.map((u) => new Request(u, { cache: 'reload' }))); // bypass the browser HTTP cache
     await Promise.all(CDN.map((u) => c.add(new Request(u, { mode: 'cors' })).catch(() => {})));
   }).then(() => self.skipWaiting()));
 });
