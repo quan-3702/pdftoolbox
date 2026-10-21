@@ -567,7 +567,7 @@ async function ocrRun(makePdf) {
       const txt = r.texts.map((t, i) => (r.texts.length > 1 ? `--- Page ${i + 1} ---\n` : '') + t).join('\n\n');
       const name = baseName() + '.txt';
       download(new Blob(['﻿' + txt], { type: 'text/plain;charset=utf-8' }), name);
-      try { await navigator.clipboard.writeText(txt); } catch (_) {}
+      try { navigator.clipboard.writeText(txt).catch(() => {}); } catch (_) {} // never wait for the clipboard
       showSummary(`<strong>${esc(name)}</strong> · ${words} words found – the text is also copied, paste it with Ctrl+V.`);
     }
   });
