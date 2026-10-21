@@ -247,7 +247,7 @@ function render() {
   if (files > FREE_FILES && !unlocked()) label += ` · free version merges up to ${FREE_FILES} files`;
   $('count').textContent = label;
   $('empty').hidden = n > 0;
-  ['selAll', 'selNone', 'clear', 'saveAll', 'split'].forEach((id) => { $(id).disabled = !n; });
+  ['selAll', 'selNone', 'clear', 'saveAll', 'split', 'ocrPdf', 'ocrTxt'].forEach((id) => { $(id).disabled = !n; });
   ['rotSel', 'delSel', 'saveSel'].forEach((id) => { $(id).disabled = !s; });
 }
 
@@ -498,6 +498,81 @@ async function compressPdf(bytes, mode, onProgress) {
   return best;
 }
 
+// ---------- read text in scans (OCR) – Tesseract runs in the browser, the language data is kept after the first download ----------
+const TESS = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+const OCR_LANGS = [['eng', 'English'], ['vie', 'Vietnamese – Tiếng Việt'], ['spa', 'Spanish'], ['fra', 'French'], ['deu', 'German'], ['por', 'Portuguese'], ['ita', 'Italian'], ['nld', 'Dutch'], ['pol', 'Polish'], ['chi_sim', 'Chinese (simplified)'], ['jpn', 'Japanese'], ['kor', 'Korean']];
+const FREE_OCR_PAGES = 3;
+let tessP = null;
+function tess() {
+  if (!tessP) tessP = new Promise((res, rej) => {
+    const sc = document.createElement('script'); sc.src = TESS;
+    sc.onload = () => res(window.Tesseract);
+    sc.onerror = () => { tessP = null; rej(new Error('The text reader could not be loaded – connect to the internet once, then it also works offline.')); };
+    document.head.appendChild(sc);
+  });
+  return tessP;
+}
+async function ocrPages(list, lang, makePdf, set) {
+  const bytes = await buildPdf(list, { compress: 'none', wm: '', pageNums: false }, (i) => set(`Preparing page ${i + 1}/${list.length}…`));
+  const T = await tess();
+  const langName = (OCR_LANGS.find((l) => l[0] === lang) || [, lang])[1];
+  set(`Starting the ${langName} text reader…`);
+  const worker = await T.createWorker(lang, 1, { logger: (m) => { if (/loading/.test(m.status || '') && m.progress < 1) set(`Downloading the ${langName} reader (once)… ${Math.round((m.progress || 0) * 100)}%`); } });
+  const DPI = 200;
+  await worker.setParameters({ user_defined_dpi: String(DPI) });
+  const lib = await pdfjs();
+  const src = await lib.getDocument({ data: bytes.slice() }).promise;
+  const out = makePdf ? await PDFDocument.load(bytes) : null;
+  const texts = [];
+  try {
+    for (let i = 1; i <= src.numPages; i++) {
+      set(`Reading page ${i}/${src.numPages}…`);
+      const pg = await src.getPage(i);
+      const vp = pg.getViewport({ scale: DPI / 72 });
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(vp.width)); c.height = Math.max(1, Math.round(vp.height));
+      const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+      await pg.render({ canvasContext: ctx, viewport: vp, intent: 'print' }).promise;
+      pg.cleanup();
+      const r = await worker.recognize(c, { pdfTitle: baseName(), pdfTextOnly: true }, { text: true, pdf: makePdf });
+      texts.push((r.data.text || '').trim());
+      if (makePdf && r.data.pdf) {
+        // lay the invisible text page exactly over the original page, so the page looks the same but can be searched
+        const tp = await PDFDocument.load(new Uint8Array(r.data.pdf));
+        const [emb] = await out.embedPdf(tp, [0]);
+        const page = out.getPage(i - 1);
+        const R = ((page.getRotation().angle % 360) + 360) % 360, box = page.getMediaBox();
+        const Vw = R % 180 ? box.height : box.width, Vh = R % 180 ? box.width : box.height;
+        const a = viewToPdf(box, R, 0, Vh);
+        page.drawPage(emb, { x: a.x, y: a.y, width: Vw, height: Vh, rotate: degrees(R) });
+      }
+    }
+  } finally { await worker.terminate(); src.destroy(); }
+  return { texts, pdf: out ? await out.save() : null };
+}
+async function ocrRun(makePdf) {
+  const list = pages.filter((p) => p.sel).length ? pages.filter((p) => p.sel) : pages.slice();
+  if (!list.length) return;
+  if (makePdf && !unlocked()) { openPro('Making a searchable PDF is part of Pro. You can read the text of up to ' + FREE_OCR_PAGES + ' pages into a text file for free.'); return; }
+  if (!makePdf && list.length > FREE_OCR_PAGES && !unlocked()) { openPro(`The free version reads the text of up to ${FREE_OCR_PAGES} pages at a time. Select ${FREE_OCR_PAGES} pages, or unlock Pro for any number.`); return; }
+  const lang = $('ocrLang').value;
+  try { localStorage.setItem('pdftoolbox-ocr-lang', lang); } catch (_) {}
+  await run(makePdf ? 'ocrPdf' : 'ocrTxt', '', async (set) => {
+    const r = await ocrPages(list, lang, makePdf, set);
+    const words = r.texts.join(' ').split(/\s+/).filter(Boolean).length;
+    if (makePdf) {
+      const name = baseName() + '-searchable.pdf', size = download(r.pdf, name);
+      showSummary(`<strong>${esc(name)}</strong> · ${list.length} page${list.length > 1 ? 's' : ''} · ${words} words found · ${fmtBytes(size)}<br>Open it and press Ctrl+F to search, or select the text to copy it.`);
+    } else {
+      const txt = r.texts.map((t, i) => (r.texts.length > 1 ? `--- Page ${i + 1} ---\n` : '') + t).join('\n\n');
+      const name = baseName() + '.txt';
+      download(new Blob(['﻿' + txt], { type: 'text/plain;charset=utf-8' }), name);
+      try { await navigator.clipboard.writeText(txt); } catch (_) {}
+      showSummary(`<strong>${esc(name)}</strong> · ${words} words found – the text is also copied, paste it with Ctrl+V.`);
+    }
+  });
+}
+
 function options() {
   return { compress: $('compress').value, wm: $('wmText').value.trim(), pageNums: $('pageNums').checked };
 }
@@ -584,6 +659,10 @@ $('clear').onclick = () => {
 $('saveAll').onclick = () => saveList(pages.slice(), '', 'saveAll');
 $('saveSel').onclick = () => saveList(pages.filter((p) => p.sel), '-selected', 'saveSel');
 $('split').onclick = splitAll;
+$('ocrLang').innerHTML = OCR_LANGS.map(([v, n]) => `<option value="${v}">${esc(n)}</option>`).join('');
+try { const l = localStorage.getItem('pdftoolbox-ocr-lang'); if (l) $('ocrLang').value = l; } catch (_) {}
+$('ocrPdf').onclick = () => ocrRun(true);
+$('ocrTxt').onclick = () => ocrRun(false);
 $('fname').addEventListener('input', () => { $('fname').dataset.touched = '1'; });
 $('compress').addEventListener('change', () => {
   const v = $('compress').value;
