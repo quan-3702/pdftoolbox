@@ -90,3 +90,5 @@ body.is-pro .badge, body.pro-off .badge { display: none; }
 .promo strong { color: var(--text); font-size: 13px; }
 .promo:hover { border-color: var(--accent); }
 .promo.feedback { justify-content: center; color: var(--accent); font-weight: 600; }
+.fb-note { color: var(--muted); font-size: 12px; font-weight: 400; line-height: 1.45; margin: 10px 0 0; overflow-wrap: anywhere; }
+.fb-note a { color: inherit; text-decoration: underline; }

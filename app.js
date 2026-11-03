@@ -19,7 +19,14 @@ let proAvailable = false; // Pro limits apply only when the Store actually sells
 proAvailable = true; // owner's rule: Pro is never free – free limits apply everywhere (website, Store, offline) until Pro is bought
 let proSku = PRO_SKU;
 let isPro = false;
-try { isPro = localStorage.getItem('pdftoolbox-pro') === '1'; } catch (_) {}
+try { // website: never trust the cache (Pro is bought in the Store app); Store app: trust it only if the Store confirmed it in the last 30 days
+  if ('getDigitalGoodsService' in window && localStorage.getItem('pdftoolbox-pro') === '1') {
+    const ok = localStorage.getItem('pdftoolbox-pro-ok');
+    if (ok === null) localStorage.setItem('pdftoolbox-pro-ok', String(Date.now())); // saved by an older version: counts as confirmed now, once
+    const t = ok === null ? Date.now() : Number(ok);
+    isPro = t > 0 && t <= Date.now() + 864e5 && Date.now() - t < 30 * 864e5; // a future, NaN or garbage date is not trusted
+  }
+} catch (_) {}
 const unlocked = () => isPro || !proAvailable;
 
 async function billing() {
@@ -55,7 +62,10 @@ async function checkPro() {
     if (details[0]) { proSku = details[0].itemId; if (!PRO_IDS.includes(proSku)) PRO_IDS.push(proSku); }
     const list = await svc.listPurchases();
     const owned = list.some((p) => PRO_IDS.includes(p.itemId));
-    if (owned || details.length) { setPro(owned); return owned; }
+    if (owned || details.length) {
+      try { if (owned) localStorage.setItem('pdftoolbox-pro-ok', String(Date.now())); else localStorage.removeItem('pdftoolbox-pro-ok'); } catch (_) {}
+      setPro(owned); return owned;
+    }
     setPro(isPro); // Store did not answer (offline): keep what we knew
     return isPro;
   } catch (_) { return isPro; }
