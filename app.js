@@ -16,6 +16,7 @@ const PRO_SKU = 'pdftoolbox_pro';
 const PRO_IDS = [PRO_SKU];
 const STORE_URL = 'https://apps.microsoft.com/detail/9NPWMMZ1NPPV';
 let proAvailable = false; // Pro limits apply only when the Store actually sells the add-on
+try { if ('getDigitalGoodsService' in window && localStorage.getItem('pdftoolbox-proavail') === '1') proAvailable = true; } catch (_) {} // keep Pro limits when offline
 let proSku = PRO_SKU;
 let isPro = false;
 try { isPro = localStorage.getItem('pdftoolbox-pro') === '1'; } catch (_) {}
@@ -38,17 +39,26 @@ function setPro(v) {
   [...$('compress').options].forEach((o) => { o.textContent = o.textContent.replace(' ★ Pro', '') + (unlocked() || ['none', 'medium'].includes(o.value) ? '' : ' ★ Pro'); });
 }
 
+async function checkProAfterBuy() {
+  for (let i = 0; i < 6; i++) {
+    if (await checkPro()) return true;
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+  proMessage('Thank you! If Pro is not unlocked within a minute, click “Restore purchase”.');
+  return false;
+}
 async function checkPro() {
   const svc = await billing();
   if (!svc) return false;
   try {
     const details = await svc.getDetails(PRO_IDS).catch(() => []);
-    proAvailable = details.length > 0;
+    if (details.length) { proAvailable = true; try { localStorage.setItem('pdftoolbox-proavail', '1'); } catch (_) {} }
     if (details[0]) { proSku = details[0].itemId; if (!PRO_IDS.includes(proSku)) PRO_IDS.push(proSku); }
     const list = await svc.listPurchases();
     const owned = list.some((p) => PRO_IDS.includes(p.itemId));
-    setPro(owned);
-    return owned;
+    if (owned || details.length) { setPro(owned); return owned; }
+    setPro(isPro); // Store did not answer (offline): keep what we knew
+    return isPro;
   } catch (_) { return isPro; }
 }
 
@@ -86,7 +96,7 @@ async function buyPro() {
     proMessage('Purchase could not be completed: ' + (e.message || e));
     return;
   }
-  if (await checkPro()) {
+  if (await checkProAfterBuy()) {
     proMessage('Thank you! Pro is unlocked. ★');
     setTimeout(() => $('proDialog').close(), 1500);
   }
@@ -667,7 +677,8 @@ $('fname').addEventListener('input', () => { $('fname').dataset.touched = '1'; }
 $('compress').addEventListener('change', () => {
   const v = $('compress').value;
   $('compressHint').hidden = v === 'none';
-  if (!unlocked() && !['none', 'medium'].includes(v)) { openPro('Strong compression and compressing under a size are Pro features.'); $('compress').value = 'medium'; }
+  if (!unlocked() && !['none', 'medium'].includes(v)) { openPro('Strong compression and compressing under a size are Pro features.'); $('compress').value = $('compress').dataset.prev || 'none'; $('compressHint').hidden = $('compress').value === 'none'; }
+  $('compress').dataset.prev = $('compress').value; // go back to the user's last free choice, never switch it silently
 });
 $('wmText').addEventListener('change', () => { if ($('wmText').value.trim() && !unlocked()) openPro('Watermarks are a Pro feature.'); });
 $('pageNums').addEventListener('change', () => { if ($('pageNums').checked && !unlocked()) { openPro('Page numbers are a Pro feature.'); $('pageNums').checked = false; } });
